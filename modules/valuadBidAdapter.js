@@ -1,5 +1,5 @@
 import { registerBidder } from '../src/adapters/bidderFactory.js';
-import { BANNER } from '../src/mediaTypes.js';
+import { BANNER, VIDEO } from '../src/mediaTypes.js';
 import { ortbConverter } from '../libraries/ortbConverter/converter.js';
 import {
   deepAccess,
@@ -108,6 +108,9 @@ const converter = ortbConverter({
     if (mediaType === BANNER) {
       adSize = bid.mediaTypes.banner.sizes && bid.mediaTypes.banner.sizes[0];
     }
+    else if(mediaType === VIDEO) {
+      adSize = bid.mediaTypes.video.playerSize && bid.mediaTypes.video.playerSize[0];
+    }
 
     if (!adSize) { adSize = [0, 0]; }
 
@@ -129,6 +132,9 @@ const converter = ortbConverter({
 
         if (mediaType === BANNER) {
           size = bid.mediaTypes.banner.sizes && bid.mediaTypes.banner.sizes[0];
+        }
+        else if(mediaType === VIDEO) {
+          adSize = bid.mediaTypes.video.playerSize && bid.mediaTypes.video.playerSize[0];
         }
 
         if (size) {
@@ -180,6 +186,8 @@ function isBidRequestValid(bid = {}) {
 
   if (mediaTypes && mediaTypes[BANNER]) {
     valid = valid && Boolean(mediaTypes[BANNER] && mediaTypes[BANNER].sizes);
+  } else if(mediaTypes && mediaTypes[VIDEO]) {
+    valid = valid && Boolean(mediaTypes[VIDEO] && mediaTypes[VIDEO].playerSize);
   } else {
     valid = false;
   }
@@ -217,10 +225,10 @@ function getUserSyncs(syncOptions, serverResponses) {
 
 function onBidWon(bid) {
   const {
-    adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid,
+    adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid, mediaType
   } = bid;
   const bidStr = JSON.stringify({
-    adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid,
+    adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid, mediaType
   });
   const encodedBidStr = window.btoa(bidStr);
   triggerPixel(WON_URL + '?b=' + encodedBidStr);
@@ -228,7 +236,7 @@ function onBidWon(bid) {
 
 export const spec = {
   code: BIDDER_CODE,
-  supportedMediaTypes: [BANNER],
+  supportedMediaTypes: [BANNER, VIDEO],
   isBidRequestValid,
   buildRequests,
   interpretResponse,
