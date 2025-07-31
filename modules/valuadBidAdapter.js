@@ -12,10 +12,12 @@ import {
 import { getGptSlotInfoForAdUnitCode } from '../libraries/gptUtils/gptUtils.js';
 import { config } from '../src/config.js';
 import { getBoundingBox, percentInView } from '../libraries/percentInView/percentInView.js';
+import { Renderer } from '../src/Renderer.js';
 
 const BIDDER_CODE = 'valuad';
 const AD_URL = 'https://rtb.valuad.io/adapter';
 const WON_URL = 'https://hb-dot-valuad.appspot.com/adapter/win';
+const OUTSTREAM_RENDERER_URL = 'https://cdn.valuad.cloud/vadOutstreamVideoPlayer.min.js';
 
 function _isIframe() {
   try {
@@ -107,8 +109,7 @@ const converter = ortbConverter({
 
     if (mediaType === BANNER) {
       adSize = bid.mediaTypes.banner.sizes && bid.mediaTypes.banner.sizes[0];
-    }
-    else if(mediaType === VIDEO) {
+    } else if (mediaType === VIDEO) {
       adSize = bid.mediaTypes.video.playerSize && bid.mediaTypes.video.playerSize[0];
     }
 
@@ -132,8 +133,7 @@ const converter = ortbConverter({
 
         if (mediaType === BANNER) {
           size = bid.mediaTypes.banner.sizes && bid.mediaTypes.banner.sizes[0];
-        }
-        else if(mediaType === VIDEO) {
+        } else if (mediaType === VIDEO) {
           adSize = bid.mediaTypes.video.playerSize && bid.mediaTypes.video.playerSize[0];
         }
 
@@ -158,7 +158,9 @@ const converter = ortbConverter({
   },
 
   bidResponse(buildBidResponse, bid, context) {
+    const { bidRequest } = context;
     let bidResponse;
+
     try {
       bidResponse = buildBidResponse(bid, context);
 
@@ -170,10 +172,27 @@ const converter = ortbConverter({
           bidResponse.vid = context.bidRequest.params.placementId;
         }
       }
+
+      if (bidResponse.mediaType === VIDEO && bidRequest.mediaTypes.video.context === 'outstream') {
+        const renderer = Renderer.install({
+          adUnitCode: bidRequest.adUnitCode,
+          id: bidRequest.bidId,
+          url: OUTSTREAM_RENDERER_URL,
+        });
+
+        renderer.setRender((bid) => {
+          bid.renderer.push(() => {
+            window.vadOutstreamRenderVideo(bid);
+          });
+        });
+
+        bidResponse.renderer = renderer;
+      }
     } catch (e) {
       logInfo('[VALUAD CONVERTER] Error calling buildBidResponse:', e, 'Bid:', bid);
       return;
     }
+
     return bidResponse;
   },
 });
@@ -186,7 +205,7 @@ function isBidRequestValid(bid = {}) {
 
   if (mediaTypes && mediaTypes[BANNER]) {
     valid = valid && Boolean(mediaTypes[BANNER] && mediaTypes[BANNER].sizes);
-  } else if(mediaTypes && mediaTypes[VIDEO]) {
+  } else if (mediaTypes && mediaTypes[VIDEO]) {
     valid = valid && Boolean(mediaTypes[VIDEO] && mediaTypes[VIDEO].playerSize);
   } else {
     valid = false;
@@ -227,11 +246,14 @@ function onBidWon(bid) {
   const {
     adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid, mediaType
   } = bid;
-  const bidStr = JSON.stringify({
-    adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid, mediaType
-  });
-  const encodedBidStr = window.btoa(bidStr);
-  triggerPixel(WON_URL + '?b=' + encodedBidStr);
+
+  if (mediaType !== 'video') {
+    const bidStr = JSON.stringify({
+      adUnitCode, adUnitId, auctionId, bidder, cpm, currency, originalCpm, originalCurrency, size, vbid, vid
+    });
+    const encodedBidStr = window.btoa(bidStr);
+    triggerPixel(WON_URL + '?b=' + encodedBidStr);
+  }
 }
 
 export const spec = {
